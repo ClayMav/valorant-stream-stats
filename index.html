@@ -10,7 +10,6 @@
 
       }
       .wrap {
-        background-color: pink;
         font-weight: bold;
         text-align: center;
         line-height: 40px;
@@ -23,18 +22,26 @@
     <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
     <script>
       function UsernameException() {}
+      const RANKS = ["Unrated", "", "Iron I", "Iron II", "Iron III", "Bronze I", "Bronze II", "Bronze III", "Silver I", "Silver II", "Silver III", "Gold I", "Gold II", "Gold III", "Platinum I", "Platinum II", "Platinum III", "Diamond I", "Diamond II", "Diamond III", "Immortal I", "Immortal II", "Immortal III", "Radiant", ]
 
       const urlParams = new URLSearchParams(window.location.search);
       const username = urlParams.get('username');
+      const bg = urlParams.get('bg');
+      const color = urlParams.get('color');
+      const winOffset = urlParams.get('winOffset');
+      const lossOffset = urlParams.get('lossOffset');
 
       var app = new Vue({
         el: '#app',
-        template: '<div class="wrap">{{ this.loading ? `Loading ${this.username}...` : (this.error ? `Error: ${this.error}` : `Record: ${this.wins} - ${this.losses}`) }}</div>',
+        template: '<div class="wrap"><div>{{ this.loading ? `Loading ${this.username}...` : (this.error ? `Error: ${this.error}` : `Record: ${this.wins}W - ${this.losses}L`) }}</div><div>Rank: {{ this.rank }}</div></div></div>',
         data: {
-          start: new Date("2020-07-03T03:50:39.423Z"),
+          start: new Date(),
           username: username,
+          winOffset: isNaN(parseInt(winOffset)) ? 0 : parseInt(winOffset),
+          lossOffset: isNaN(parseInt(lossOffset)) ? 0 : parseInt(lossOffset),
           wins: 0,
           losses: 0,
+          rank: "unknown",
           userId: undefined,
           loading: true,
           error: undefined,
@@ -47,14 +54,15 @@
                 throw new UsernameException();
               }
 
-              var userId = (await playerRequest.json()).id;
+              var user = await playerRequest.json();
             }
             catch (e) {
                 this.error = `Add "?username=<blitz.gg username>`;
                 return;
             }
 
-            this.userId = userId;
+            this.userId = user.id;
+            this.rank = RANKS[user.ranks.competitive.tier - 1];
             this.loading = false;
           },
           async getUpdates() {
@@ -70,22 +78,7 @@
               }
             };
 
-            console.log("MATCHES", matches)
-            console.log("SINCE_START", sinceStart)
-
-            let wins = sinceStart.map((match)=> {
-              var team1 = match.teams[0];
-              var team2 = match.teams[1];
-              var team = getUserTeam(match);
-              if (team1.won && team1.teamId === team) {
-                return `${team1.roundsWon} - ${team2.roundsWon}`
-              }
-              else if (team2.won && team2.teamId === team) {
-                return `${team2.roundsWon} - ${team1.roundsWon}`
-              }
-            });
-
-            this.wins = sinceStart.reduce((acc, match)=> {
+            wins = sinceStart.reduce((acc, match)=> {
               var team1 = match.teams[0];
               var team2 = match.teams[1];
               var userTeam = getUserTeam(match);
@@ -98,7 +91,10 @@
                 return acc;
 
             }, 0);
-            this.losses = sinceStart.length - this.wins;
+            losses = sinceStart.length - this.wins;
+
+            this.wins = this.winOffset + wins;
+            this.losses = this.lossOffset + losses;
           },
         },
         async created () {
