@@ -22,32 +22,43 @@
     </div>
     <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
     <script>
+      function UsernameException() {}
+
       const urlParams = new URLSearchParams(window.location.search);
       const username = urlParams.get('username');
 
       var app = new Vue({
         el: '#app',
-        template: '<div class="wrap">{{ this.loading ? `Loading ${this.username}...` : `Record: ${this.wins} - ${this.losses}` }}</div>',
+        template: '<div class="wrap">{{ this.loading ? `Loading ${this.username}...` : (this.error ? `Error: ${this.error}` : `Record: ${this.wins} - ${this.losses}`) }}</div>',
         data: {
-          start: new Date(),
+          start: new Date("2020-07-03T03:50:39.423Z"),
           username: username,
           wins: 0,
           losses: 0,
           userId: undefined,
           loading: true,
-          updateRecord () {
-            this.wins = this.wins + 1;
-          },
+          error: undefined,
         },
         methods: {
           async getUserId () {
-            var userId = (await (await fetch(`https://valorant.iesdev.com/player/${username}`)).json()).id;
+            try {
+              var playerRequest = await fetch(`https://valorant.iesdev.com/player/${username}`);
+              if (!playerRequest.ok) {
+                throw new UsernameException();
+              }
+
+              var userId = (await playerRequest.json()).id;
+            }
+            catch (e) {
+                this.error = `Add "?username=<blitz.gg username>`;
+                return;
+            }
+
             this.userId = userId;
             this.loading = false;
-            this.getUpdates()
-            setTimeout(this.getUpdates, 4000);
           },
           async getUpdates() {
+            console.log("Fetching updates...")
             var matches = (await (await fetch(`https://valorant.iesdev.com/matches/${this.userId}`)).json()).data;
             var sinceStart = matches.filter((match)=>new Date(match.startedAt) >= this.start);
 
@@ -58,6 +69,9 @@
                 }
               }
             };
+
+            console.log("MATCHES", matches)
+            console.log("SINCE_START", sinceStart)
 
             let wins = sinceStart.map((match)=> {
               var team1 = match.teams[0];
@@ -85,12 +99,13 @@
 
             }, 0);
             this.losses = sinceStart.length - this.wins;
-
-            console.log(wins);
           },
         },
-        created () {
-          this.getUserId();
+        async created () {
+          await this.getUserId();
+
+          this.getUpdates()
+          window.setInterval(this.getUpdates, 4000);
         }
       })
     </script>
