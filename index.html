@@ -8,7 +8,6 @@
       }
       body {
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-
       }
       .wrap {
         font-weight: bold;
@@ -34,7 +33,7 @@
 
       var app = new Vue({
         el: '#app',
-        template: '<div class="wrap"><div>{{ this.loading ? `Loading ${this.username}...` : (this.error ? `Error: ${this.error}` : `Record: ${this.wins}W - ${this.losses}L`) }}</div><div>Rank: {{ this.rank }}</div></div></div>',
+        template: '<div class="wrap"><div v-if="this.loading">Loading {{this.username}}...</div><div v-if="this.error">Error: {{this.error}}</div><div v-else><div>Record: {{this.wins}}W - {{this.losses}}L</div><div>Rank: {{this.rank}}</div></div></div>',
         data: {
           start: new Date(),
           username: username,
@@ -49,40 +48,75 @@
         },
         methods: {
           async getUserId () {
+            let user;
             try {
-              var playerRequest = await fetch(`https://valorant.iesdev.com/player/${username}`);
+              if (!this.username) {
+                throw new UsernameException();
+              }
+              const playerRequest = await fetch(`https://valorant.iesdev.com/player/${username}`);
               if (!playerRequest.ok) {
                 throw new UsernameException();
               }
 
-              var user = await playerRequest.json();
+              user = await playerRequest.json();
             }
             catch (e) {
-                this.error = `Add "?username=<blitz.gg username>`;
-                return;
+              if (!this.username) {
+                this.error = `Add "?username=<blitz.gg username>" to the url`;
+              } else {
+                this.error = `Check that username is accurate in url`;
+              }
+
+              this.loading = false;
+              return;
             }
 
+            // on successful profile get
+            this.loading = false;
             this.userId = user.id;
             this.rank = RANKS[user.ranks.competitive.tier - 1];
-            this.loading = false;
           },
-          async getUpdates() {
-            console.log("Fetching updates...")
-            var matches = (await (await fetch(`https://valorant.iesdev.com/matches/${this.userId}`)).json()).data;
-            var sinceStart = matches.filter((match)=>new Date(match.startedAt) >= this.start);
-
-            const getUserTeam = (match) => {
+          getUserTeam(match) {
               for (player of match.players) {
                 if (player.subject === this.userId){
                   return player.teamId;
                 }
               }
-            };
+          },
+          async getUpdates() {
+            console.log("Fetching updates...")
+            let matchesJson;
+
+            try {
+              if (!this.userId) {
+                throw new UsernameException();
+              }
+
+              const matchesUri = `https://valorant.iesdev.com/matches/${this.userId}`
+              const matchesRequest = await fetch(matchesUri);
+              if (!matchesRequest.ok) {
+                throw new UsernameException();
+              }
+
+              matchesJson = await matchesRequest.json();
+            }
+            catch (e) {
+              if (!this.username) {
+                this.error = `Add "?username=<blitz.gg username>" to the url`;
+              } else {
+                this.error = `Check that username is accurate in url`;
+              }
+                this.loading = false;
+                return;
+            }
+
+            const matches = matchesJson.data;
+            const sinceStart = matches.filter((match)=>new Date(match.startedAt) >= this.start);
 
             wins = sinceStart.reduce((acc, match)=> {
-              var team1 = match.teams[0];
-              var team2 = match.teams[1];
-              var userTeam = getUserTeam(match);
+              const team1 = match.teams[0];
+              const team2 = match.teams[1];
+              const userTeam = this.getUserTeam(match);
 
               if (team1.won && team1.teamId === userTeam) 
                 return acc + 1;
