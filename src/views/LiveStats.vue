@@ -145,6 +145,7 @@ export default {
 
       this.wins = this.winOffset + wins;
       this.losses = this.lossOffset + losses;
+      this.error = null;
     }
   },
   async created() {
